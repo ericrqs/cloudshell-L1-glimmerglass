@@ -1,0 +1,6 @@
+{
+  "common_variable": {
+    "connection_port": 10034,
+    "port_mode": "physical"
+  }
+}
