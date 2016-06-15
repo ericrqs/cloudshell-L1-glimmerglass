@@ -21,6 +21,7 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
 
         self._service_mode = ConfigurationParser.get("driver_variable", "service_mode")
         self._port_logical_mode = ConfigurationParser.get("driver_variable", "port_mode")
+        self._custom_port_pairing = ConfigurationParser.get("driver_variable", "custom_port_pairing")
 
     def _incr_ctag(self):
         self._ctag += 1
@@ -124,15 +125,26 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                             port_state = "Enable"
                         else:
                             port_state = "Disable"
+
+                        logical_port_map[logical_port_id]['state'] = port_state
+
                         if 'in' in port_info_dict["name"].lower():
                             logical_port_map[logical_port_id]['in'] = port_info_dict['id']
                         else:
-                            logical_port_map[logical_port_id]['out'] = port_info_dict['id']
-                        logical_port_map[logical_port_id]['state'] = port_state
+                            if logical_port_id in self._custom_port_pairing.values():
+                                for key, value in self._custom_port_pairing.iteritems():
+                                    if value == logical_port_id and key in logical_port_map:
+                                        logical_port_map[key]['out'] = port_info_dict['id']
+                            else:
+                                logical_port_map[logical_port_id]['out'] = port_info_dict['id']
 
                         if 'in' in logical_port_map[logical_port_id] and 'out' in logical_port_map[logical_port_id]:
-                            logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(logical_port_id,
-                                                                                                 logical_port_id)
+                            if logical_port_id in self._custom_port_pairing:
+                                logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(
+                                    logical_port_id, self._custom_port_pairing[logical_port_id])
+                            else:
+                                logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(logical_port_id,
+                                                                                                     logical_port_id)
 
                 for port_data in port_map_list:
                     port_map_match = re.search(r"IPORTID=(?P<src_port>\d+).*IPORTNAME=(?P<src_port_name>\S+),IP.*" +
@@ -149,6 +161,8 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                 for logical_port_index, logical_port_data in logical_port_map.iteritems():
                     port_resource_info = ResourceInfo()
                     port_resource_info.set_depth(1)
+                    if 'port_address' not in logical_port_data:
+                        continue
                     port_resource_info.set_index(logical_port_data['port_address'])
                     port_resource_info.set_model_name(model_name)
                     if logical_port_index in self._mapping_info:
@@ -174,7 +188,7 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                             self._mapping_info[src_port] = dst_port
 
                 for port_data in port_list:
-                    port_info_match = re.search(r"PORTID=(?P<id>\d+).*PORTNAME=(?P<name>(IN|OUT)\d+)"+
+                    port_info_match = re.search(r"PORTID=(?P<id>\d+).*PORTNAME=(?P<name>(IN|OUT)\d+)" +
                                                 ".*PORTHEALTH=(?P<state>good|bad)", port_data, re.DOTALL)
 
                     if port_info_match is not None:
