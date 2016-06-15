@@ -1,6 +1,10 @@
 {
-  "common_variable": {
+  "driver_variable": {
     "connection_port": 10034,
     "port_mode": "physical"
+  },
+  "custom_port_pairing": {
+    "1": "48",
+    "2": "3"
   }
 }

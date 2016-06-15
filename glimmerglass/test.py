@@ -259,7 +259,10 @@ M  1 COMPLD
    "GGN:IPORTID=0,IPORTGROUP=,IPORTNAME=,IPORTCOMMENT=,INPWR=NA,OPORTID=20050,OPORTGROUP=OpenGroup,OPORTNAME=MC-2,OPORTCOMMENT=,OUTPWR=-49.72,SIGBAND=1550,PWRLOSS=NA,CONNID=0,CONNNAME=,CONNSTATE=single,CONNCAUSE=none,CONNLOCK=0,CONNLOCKUSER="
 ;
 """
-
+custom_port_pairing = {
+    "1": "48",
+    "2": "3"
+}
 port_list = device_data['port_list'].split("\n")
 port_map_list = device_data["connections_map"].split("\n")
 _mapping_info = {}
@@ -267,27 +270,34 @@ address_prefix = '10.10.1.1'
 result_list = []
 
 logical_port_map = dict()
+temp_logical_port_map = dict()
 for port_data in port_list:
     port_info_match = re.search(r"PORTID=(?P<id>\d+).*PORTNAME=(?P<name>(IN|OUT)\d+)" +
                                 ".*PORTHEALTH=(?P<state>good|bad)", port_data, re.DOTALL)
     if port_info_match is not None:
         port_info_dict = port_info_match.groupdict()
         logical_port_id = re.sub('(IN|OUT)', '', port_info_dict["name"])
-        if logical_port_id not in logical_port_map.keys():
-            logical_port_map[logical_port_id] = {}
+        if logical_port_id not in temp_logical_port_map.keys():
+            temp_logical_port_map[logical_port_id] = {}
         if port_info_dict["state"].lower() == "good":
             port_state = "Enable"
         else:
             port_state = "Disable"
+
+        temp_logical_port_map[logical_port_id]['state'] = port_state
+
         if 'in' in port_info_dict["name"].lower():
-            logical_port_map[logical_port_id]['in'] = port_info_dict['id']
+            temp_logical_port_map[logical_port_id]['in'] = port_info_dict['id']
         else:
-            logical_port_map[logical_port_id]['out'] = port_info_dict['id']
-        logical_port_map[logical_port_id]['state'] = port_state
+            temp_logical_port_map[logical_port_id]['out'] = port_info_dict['id']
 
         if 'in' in logical_port_map[logical_port_id] and 'out' in logical_port_map[logical_port_id]:
             logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(logical_port_id,
                                                                                  logical_port_id)
+
+    if 'in' in logical_port_map[logical_port_id] and 'out' in logical_port_map[logical_port_id]:
+        logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(logical_port_id,
+                                                                             logical_port_id)
 
 for port_data in port_map_list:
     port_map_match = re.search(r"IPORTID=(?P<src_port>\d+).*IPORTNAME=(?P<src_port_name>\S+),IP.*" +
@@ -307,7 +317,8 @@ for logical_port_index, logical_port_data in logical_port_map.iteritems():
     port_resource_info.set_index(logical_port_data['port_address'])
     port_resource_info.set_model_name('adadadad')
     if logical_port_index in _mapping_info:
-        port_resource_info.set_mapping(address_prefix + logical_port_map[_mapping_info[logical_port_index]]['port_address'])
+        port_resource_info.set_mapping(
+            address_prefix + logical_port_map[_mapping_info[logical_port_index]]['port_address'])
     port_resource_info.add_attribute("State", logical_port_data['state'])
     port_resource_info.add_attribute("Protocol Type", 0)
     result_list.append((logical_port_index, port_resource_info))

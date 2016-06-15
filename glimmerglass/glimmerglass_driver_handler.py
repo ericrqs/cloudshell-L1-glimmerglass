@@ -152,26 +152,12 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                     port_resource_info.set_index(logical_port_data['port_address'])
                     port_resource_info.set_model_name(model_name)
                     if logical_port_index in self._mapping_info:
-                        port_resource_info.set_mapping(address_prefix + logical_port_map[self._mapping_info[logical_port_index]]['port_address'])
+                        port_resource_info.set_mapping(address_prefix +
+                                                       logical_port_map[self._mapping_info[logical_port_index]][
+                                                           'port_address'])
                     port_resource_info.add_attribute("State", logical_port_data['state'])
                     port_resource_info.add_attribute("Protocol Type", 0)
                     self._resource_info.add_child(logical_port_data['port_address'], port_resource_info)
-
-                port_map_list = device_data["connections_map"].split("\n")
-
-                for port_data in port_map_list:
-                    port_map_match = re.search(r"IPORTID=(?P<src_port>\d+).*IPORTNAME=(?P<src_port_name>\S+),IP.*" +
-                                               "OPORTID=(?P<dst_port>\d+).*OPORTNAME=(?P<dst_port_name>\S+),OP.*",
-                                               port_data, re.DOTALL)
-
-                    if port_map_match is not None:
-                        port_map_dict = port_map_match.groupdict()
-                        src_logical_port_id = re.sub('(IN|OUT)', '', port_map_dict["src_port_name"])
-                        dst_logical_port_id = re.sub('(IN|OUT)', '', port_map_dict["dst_port_name"])
-
-                        if src_logical_port_id in logical_port_map.keys() \
-                                and dst_logical_port_id in logical_port_map.keys():
-                            self._mapping_info[src_logical_port_id] = dst_logical_port_id
             else:
                 for port_data in port_map_list:
                     port_map_match = re.search(r"IPORTID=(?P<src_port>\d+).*IPORTNAME=(?P<src_port_name>\S+),IP.*" +
@@ -184,7 +170,8 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                                         int(port_map_dict['dst_port']) > 0:
                             src_port = port_map_dict["src_port"]
                             dst_port = port_map_dict["dst_port"]
-                            self._mapping_info[dst_port] = src_port
+                            # self._mapping_info[dst_port] = src_port
+                            self._mapping_info[src_port] = dst_port
 
                 for port_data in port_list:
                     port_info_match = re.search(r"PORTID=(?P<id>\d+).*PORTNAME=(?P<name>(IN|OUT)\d+)"+
@@ -252,7 +239,8 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                 command_result = self._session.send_command(command, re_string=self._prompt)
                 command_logger.info(command_result)
             else:
-                self.map_uni(src_port, dst_port, command_logger)
+                raise Exception(self.__name__, "Bidirectional port mapping could be done only in logical port_mode " +
+                                "(current mode: '" + self._port_logical_mode + "'")
 
     def map_clear_to(self, src_port, dst_port, command_logger=None):
         if self._service_mode.lower() == "scpi":
