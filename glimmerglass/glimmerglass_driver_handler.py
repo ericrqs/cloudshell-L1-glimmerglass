@@ -129,22 +129,20 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                         logical_port_map[logical_port_id]['state'] = port_state
 
                         if 'in' in port_info_dict["name"].lower():
-                            logical_port_map[logical_port_id]['in'] = port_info_dict['id']
+                            logical_port_map[logical_port_id]['in'] = logical_port_id
                         else:
                             if logical_port_id in self._custom_port_pairing.values():
                                 for key, value in self._custom_port_pairing.iteritems():
                                     if value == logical_port_id and key in logical_port_map:
-                                        logical_port_map[key]['out'] = port_info_dict['id']
+                                        logical_port_map[key]['out'] = logical_port_id
                             else:
-                                logical_port_map[logical_port_id]['out'] = port_info_dict['id']
+                                logical_port_map[logical_port_id]['out'] = logical_port_id
 
-                        if 'in' in logical_port_map[logical_port_id] and 'out' in logical_port_map[logical_port_id]:
-                            if logical_port_id in self._custom_port_pairing:
-                                logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(
-                                    logical_port_id, self._custom_port_pairing[logical_port_id])
-                            else:
-                                logical_port_map[logical_port_id]['port_address'] = '{0}-{1}'.format(logical_port_id,
-                                                                                                     logical_port_id)
+                for port_id, port_data in logical_port_map.iteritems():
+                    if 'in' in port_data and 'out' in port_data:
+                        logical_port_map[port_id]['port_address'] = '{0}-{1}'.format(
+                            logical_port_map[port_id]['in'],
+                            logical_port_map[port_id]['out'])
 
                 for port_data in port_map_list:
                     port_map_match = re.search(r"IPORTID=(?P<src_port>\d+).*IPORTNAME=(?P<src_port_name>\S+),IP.*" +
