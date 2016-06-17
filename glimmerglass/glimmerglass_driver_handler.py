@@ -37,6 +37,13 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
             command_result = self._session.send_command(command, re_string=self._prompt)
             command_logger.info(command_result)
 
+            if not re.search (r'COMPLD', command_result):
+                command_logger.info('Didn\'t find success message, retrying ...')
+                command_result = self._session.send_command(command, re_string=self._prompt)
+                command_logger.info(command_result)
+            else:
+                command_logger.info('Login status: OK')
+
             match_result = re.search(r"<\s+(?P<host>\S+)\s+\d+", command_result, re.DOTALL)
             if match_result is not None:
                 self._switch_name = match_result.groupdict()['host']
@@ -198,7 +205,7 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                         port_id = port_info_dict["id"]
                         port_resource_info.set_index(port_id)
                         port_resource_info.set_model_name(model_name)
-                        port_resource_info.set_name(port_info_dict["name"])
+                        #port_resource_info.set_name(port_info_dict["name"])
 
                         if port_id in self._mapping_info:
                             port_resource_info.set_mapping(address_prefix + self._mapping_info[port_id])
@@ -212,7 +219,7 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
 
                         self._resource_info.add_child(port_info_dict["id"], port_resource_info)
         else:
-            raise Exception(self.__name__, "From service mode type (current mode: '" +
+            raise Exception(self.__class__.__name__, "From service mode type (current mode: '" +
                             self._service_mode + "'!")
 
         return self._resource_info.convert_to_xml()
@@ -251,7 +258,7 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
                 command_result = self._session.send_command(command, re_string=self._prompt)
                 command_logger.info(command_result)
             else:
-                raise Exception(self.__name__, "Bidirectional port mapping could be done only in logical port_mode " +
+                raise Exception(self.__class__.__name__, "Bidirectional port mapping could be done only in logical port_mode " +
                                 "(current mode: '" + self._port_logical_mode + "'")
 
     def map_clear_to(self, src_port, dst_port, command_logger=None):
@@ -283,6 +290,9 @@ class GlimmerglassDriverHandler(DriverHandlerBase):
             else:
                 self.map_clear_to(src_port, dst_port, command_logger)
 
+    def  set_speed_manual(selfself,  command_logger=None):
+        pass
+
 
 if __name__ == '__main__':
     from cloudshell.core.logger.qs_logger import get_qs_logger
@@ -290,3 +300,4 @@ if __name__ == '__main__':
     gglass = GlimmerglassDriverHandler()
     plogger = get_qs_logger('Autoload', 'GlimmerGlass', 'GlimmerGlass')
     gglass.login('192.168.2.41:10033', 'admin', 'password', plogger)
+

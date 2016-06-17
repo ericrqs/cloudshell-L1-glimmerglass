@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import sys
+import sys, os
 
 from common.configuration_parser import ConfigurationParser
 from common.helper.system_helper import get_file_folder
@@ -9,6 +9,7 @@ from common.server_connection import ServerConnection
 from common.request_manager import RequestManager
 from common.request_handler import RequestHandler
 
+from cloudshell.core.logger.qs_logger import get_qs_logger
 
 if __name__ == '__main__':
     print 'Argument List: ', str(sys.argv)
@@ -19,6 +20,8 @@ if __name__ == '__main__':
         port = int(sys.argv[1])
 
     exe_folder_str = get_file_folder(sys.argv[0])
+    os.environ['LOG_PATH'] = os.path.join(exe_folder_str, '..', 'Logs')
+
     ConfigurationParser.set_root_folder(exe_folder_str)
     ConfigurationParser.init()
 
@@ -33,6 +36,7 @@ if __name__ == '__main__':
     request_manager.bind_command('mapbidi', (RequestHandler.map_bidi, request_handler))
     request_manager.bind_command('mapclearto', (RequestHandler.map_clear_to, request_handler))
     request_manager.bind_command('mapclear', (RequestHandler.map_clear, request_handler))
+    request_manager.bind_command('setspeedmanual', (RequestHandler.set_speed_manual, request_handler))
 
     server_connection = ServerConnection(host, port, request_manager, exe_folder_str)
 
