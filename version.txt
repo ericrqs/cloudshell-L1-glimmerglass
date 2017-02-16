@@ -30,12 +30,12 @@ VSVersionInfo(
       StringTable(
         u'040904b0',
         [StringStruct(u'CompanyName', u'Qualisystems'),
-        StringStruct(u'ProductName', u'L1 Driver'),
-        StringStruct(u'ProductVersion', u'1.0.0.0'),
+        StringStruct(u'ProductName', u'Glimmerglass L1 Driver'),
+        StringStruct(u'ProductVersion', u'2, 0, 3, 0'),
         StringStruct(u'InternalName', u'L1 Driver'),
-        StringStruct(u'OriginalFilename', u'Glimmerglass.exe'),
+        StringStruct(u'OriginalFilename', u'GlimmerglassDriver.exe'),
         StringStruct(u'FileVersion', u'96, 12, 19, 1'),
-        StringStruct(u'FileDescription', u'Glimmerglass driver'),
+        StringStruct(u'FileDescription', u'Glimmerglass L1 driver'),
         StringStruct(u'LegalCopyright', u'Copyright 2016 Quali, Inc.'),
         StringStruct(u'LegalTrademarks', u'Quali, Inc.'),])
       ]),

@@ -1,6 +1,23 @@
 {
-  "driver_variable": {
+  "common_variable": {
     "connection_port": 10034,
+    "resource_name": [
+      "Unused",
+      "Blade {address}",
+      "Port {address}"
+    ],
+    "resource_family_name": [
+      "L1 Optical Switch",
+      "L1 Optical Switch Blade",
+      "L1 Optical Switch Port"
+    ],
+    "resource_model_name": [
+      "Glimmerglass",
+      "Blade Glimmerglass",
+      "Port Glimmerglass"
+    ]
+  },
+  "driver_variable": {
     "port_mode": "physical",
     "custom_port_pairing": {
       "1": "48",

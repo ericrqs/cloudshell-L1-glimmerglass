@@ -2,5 +2,4 @@ build/*.*
 dist
 build
 *.pyc
-glimmerglass/test.py
-glimmerglass/test.py
+sample
