@@ -74,6 +74,7 @@ CommandMode.RELATIONS_DICT = {
 }
 
 TL1_COMMAND = CommandTemplate('{command}')
+SCPI_COMMAND = CommandTemplate('{command}')
 
 SHOW_VERSION = CommandTemplate('show version', action_map=OrderedDict([
     (r'--More--', lambda session, logger: session._send(' ', logger))
@@ -172,44 +173,113 @@ class TL1Session(TCPSession):
         return rv
 
 
+class SCPISession(TCPSession):
+    SESSION_TYPE = 'SCPI'
+    BUFFER_SIZE = 1024
+
+    def __init__(self, host, port, on_session_start=None, *args, **kwargs):
+        super(SCPISession, self).__init__(host, port, on_session_start=on_session_start, *args, **kwargs)
+
+    def connect(self, prompt, logger):
+        """
+        Open connection to device / create session
+        :param prompt:
+        :param logger:
+        :return:
+        """
+
+        if not self._handler:
+            self._handler = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        server_address = (self.host, self.port)
+        self._handler.connect(server_address)
+        self._handler.settimeout(self._timeout)
+
+        if self.on_session_start and callable(self.on_session_start):
+            self.on_session_start(self, logger)
+        self._active = True
+
+    def hardware_expect(self, command, expected_string, logger, action_map=None, error_map=None, timeout=None,
+                        retries=None, check_action_loop_detector=True, empty_loop_timeout=None,
+                        remove_command_from_output=True, **optional_args):
+
+        if ';:system:error?' not in command.lower():
+            command += ';:system:error?'
+
+        statusre = r'([-0-9]+), "(.*)"[\r\n]*$'
+
+        remove_command_from_output = False  # avoid 'multiple repeat' error - bug in expect_session
+
+        rv = super(SCPISession, self).hardware_expect(command, statusre, logger, action_map, error_map, timeout,
+                                                     retries, check_action_loop_detector, empty_loop_timeout,
+                                                     remove_command_from_output, **optional_args)
+
+        m = re.search(statusre, rv)
+        if not m:
+            raise Exception('SCPI status code not found in output: %s' % rv)
+        code, message = m.groups()
+        if code < 0:
+            raise Exception('SCPI error: %d: %s' % (code, message))
+
+        return rv
+
 class _GlimmerglassCliHandler(CliHandlerImpl):
-    def __init__(self, cli, logger, cli_type, host, port, username, password):
+    def __init__(self, cli, logger):
         super(_GlimmerglassCliHandler, self).__init__(cli, None, logger, None)
-        self._cli_type = cli_type
-        self._host = host
-        self._port = port
-        self._username = username
-        self._password = password
+        self._cli_type = None
+        self._resource_address = None
+        self._port = None
+        self._username = None
+        self._password = None
 
         modes = CommandModeHelper.create_command_mode()
         self.default_mode = modes[GlimmerglassDefaultCommandMode]
         self.enable_mode = modes[GlimmerglassEnableCommandMode]
         self.config_mode = modes[GlimmerglassConfigCommandMode]
 
-        if cli_type.lower() == 'tl1':
-            # Sending an empty line to probe for the current prompt doesn't work for TL1.
-            # With this workaround, TL1 is always considered to be in the default mode.
-            CommandModeHelper.determine_current_mode = staticmethod(lambda o1, o2, o3: self.default_mode)
-
     @property
     def resource_address(self):
-        return self._host
+        return self._resource_address
+
+    @resource_address.setter
+    def resource_address(self, v):
+        self._resource_address = v
 
     @property
     def password(self):
         return self._password
 
+    @password.setter
+    def password(self, v):
+        self._password = v
+
     @property
     def cli_type(self):
         return self._cli_type
+
+    @cli_type.setter
+    def cli_type(self, cli_type):
+        self._cli_type = cli_type
+        if cli_type.lower() in ['tl1', 'scpi']:
+            # Sending an empty line to probe for the current prompt doesn't work for TL1.
+            # With this workaround, TL1 is always considered to be in the default mode.
+            CommandModeHelper.determine_current_mode = staticmethod(lambda o1, o2, o3: self.default_mode)
 
     @property
     def username(self):
         return self._username
 
+    @username.setter
+    def username(self, v):
+        self._username = v
+
     @property
     def port(self):
         return self._port
+
+    @port.setter
+    def port(self, v):
+        self._port = v
 
     def _new_sessions(self):
         if self.cli_type.lower() == SSHSession.SESSION_TYPE.lower():
@@ -218,6 +288,8 @@ class _GlimmerglassCliHandler(CliHandlerImpl):
             new_sessions = self._telnet_session()
         elif self.cli_type.lower() == TL1Session.SESSION_TYPE.lower():
             new_sessions = self._tl1_session()
+        elif self.cli_type.lower() == SCPISession.SESSION_TYPE.lower():
+            new_sessions = self._scpi_session()
         else:
             new_sessions = [self._ssh_session(), self._telnet_session()]
         return new_sessions
@@ -234,22 +306,38 @@ class _GlimmerglassCliHandler(CliHandlerImpl):
         return TL1Session(self.resource_address, self.username, self.password, self.port, self.on_session_start,
                           loop_detector_max_action_loops=10000)
 
+    def _scpi_session(self):
+        return SCPISession(self.resource_address, self.port, self.on_session_start,
+                           loop_detector_max_action_loops=10000)
+
 
 class GlimmerglassCliConnection:
-    def __init__(self, logger, cli_type, host, port, username, password, session_pool_size=1):
+    def __init__(self, logger, session_pool_size=1):
         """
         :param logger: qs_logger
         :param cli_type: str: 'ssh', 'telnet', 'tl1'
-        :param host:
-        :param port:
-        :param username:
-        :param password:
         :param session_pool_size:
         """
         self._logger = logger
+        self._logger.info('Create GlimmerglassCliConnection')
         session_pool = SessionPoolManager(max_pool_size=session_pool_size, pool_timeout=100)
         self._cli = CLI(session_pool=session_pool)
-        self._cli_handler = _GlimmerglassCliHandler(self._cli, logger, cli_type, host, port, username, password)
+        self._cli_handler = _GlimmerglassCliHandler(self._cli, logger)
+
+    def set_resource_address(self, addr):
+        self._cli_handler.resource_address = addr
+
+    def set_port(self, port):
+        self._cli_handler.port = port
+
+    def set_username(self, username):
+        self._cli_handler.username = username
+
+    def set_password(self, password):
+        self._cli_handler.password = password
+
+    def set_cli_type(self, cli_type):
+        self._cli_handler.cli_type = cli_type
 
     def get_default_session(self):
         return self._cli_handler.get_cli_service(self._cli_handler.default_mode)
@@ -259,6 +347,17 @@ class GlimmerglassCliConnection:
 
     def get_config_session(self):
         return self._cli_handler.get_cli_service(self._cli_handler.config_mode)
+
+    def scpi_command(self, cmd, ):
+        """
+        Executes an arbitrary SCPI command
+
+        :param cmd: An SCPI command like ":OXC:SWITch:CONNect:STATe?"
+        :return: str: SCPI command output including the status
+        :raises: Exception: If the command status is < 0
+        """
+        with self.get_default_session() as session:
+            return session.send_command(**SCPI_COMMAND.get_command(command=cmd))
 
     def tl1_command(self, cmd):
         """

@@ -6,18 +6,13 @@ import sys
 
 from l1_driver_resource_info import L1DriverResourceInfo
 from l1_handler_base import L1HandlerBase
-from glimmerglass_cli_connection import GlimmerglassCliConnection, GlimmerglassDefaultCommandMode, GlimmerglassEnableCommandMode, GlimmerglassConfigCommandMode
+from glimmerglass_cli_connection import GlimmerglassCliConnection
 
 
 class GlimmerglassL1Handler(L1HandlerBase):
-    
+
     def __init__(self, logger):
         self._logger = logger
-
-        self._host = None
-        self._username = None
-        self._password = None
-        self._port = None
 
         self._switch_family = None
         self._blade_family = None
@@ -28,13 +23,12 @@ class GlimmerglassL1Handler(L1HandlerBase):
         self._blade_name_template = None
         self._port_name_template = None
 
-        self._switch_size = 0
-        self._mapping_info = dict()
-
         self._port_logical_mode = None
-        self._custom_port_pairing = None
+        self._custom_port_pairing = {}
+        self._mapping_info = {}
+        self._switch_size = 0
 
-        self._connection = None
+        self._connection = GlimmerglassCliConnection(self._logger)
 
     def login(self, address, username, password):
         """
@@ -43,10 +37,6 @@ class GlimmerglassL1Handler(L1HandlerBase):
         :param password: str
         :return: None
         """
-        self._host = address
-        self._username = username
-        self._password = password
-
         try:
             with open(os.path.join(os.path.dirname(sys.argv[0]), 'glimmerglass_runtime_configuration.json')) as f:
                 o = json.loads(f.read())
@@ -54,34 +44,31 @@ class GlimmerglassL1Handler(L1HandlerBase):
             self._logger.warn('Failed to read JSON config file: ' + str(e))
             o = {}
 
-        self._port = o.get("common_variable", {}).get("connection_port", 22)
-        GlimmerglassDefaultCommandMode.PROMPT_REGEX = o.get("common_variable", {}).get("default_prompt", r'>\s*$')
-        GlimmerglassEnableCommandMode.PROMPT_REGEX = o.get("common_variable", {}).get("enable_prompt", r'#\s*$')
-        GlimmerglassConfigCommandMode.PROMPT_REGEX = o.get("common_variable", {}).get("config_prompt", r'[(]config.*[)]#\s*$')
+        port = o.get("common_variable", {}).get("connection_port", 10034)
 
-        self._switch_family, self._blade_family, self._port_family = o.get("common_variable", {}).get("resource_family_name",
+        self._port_logical_mode = o.get("driver_variable", {}).get("port_mode", "physical")
+
+        self._switch_family, self._blade_family, self._port_family = o.get("common_variable", {}).get(
+            "resource_family_name",
             ['L1 Optical Switch', 'L1 Optical Switch Blade', 'L1 Optical Switch Port'])
-        self._switch_model, self._blade_model, self._port_model = o.get("common_variable", {}).get("resource_model_name",
+        self._switch_model, self._blade_model, self._port_model = o.get("common_variable", {}).get(
+            "resource_model_name",
             ['Glimmerglass', 'Blade Glimmerglass', 'Port Glimmerglass'])
-        _, self._blade_name_template, self._port_name_template = o.get("common_variable", {}).get("resource_name",
+        _, self._blade_name_template, self._port_name_template = o.get("common_variable", {}).get(
+            "resource_name",
             ['Unused', 'Blade {address}', 'Port {address}'])
 
-        self._logger.info('Connecting to %s on port %d with username %s' % (self._host, self._port, self._username))
-
-        self._port_logical_mode = o.get("driver_variable", {}).get("port_mode", "logical")
-
-        self._logger.info('Connecting...')
-        cli_type = 'tl1'
-        self._connection = GlimmerglassCliConnection(self._logger, cli_type, self._host, self._port, self._username, self._password)
-        self._logger.info('Connected')
+        self._connection.set_resource_address(address)
+        self._connection.set_port(port)
+        self._connection.set_username(username)
+        self._connection.set_password(password)
+        self._logger.info('Connection will be to address %s on port %d with username %s' % (address, port, username))
 
     def logout(self):
         """
         :return: None
         """
-        self._logger.info('Disconnecting...')
-        self._connection = None
-        self._logger.info('Disconnected')
+        pass
 
     def get_resource_description(self, address):
         """
@@ -114,7 +101,8 @@ class GlimmerglassL1Handler(L1HandlerBase):
             raise Exception(self.__class__.__name__, "Can't parse model info!")
         model_info_dict = model_info_match.groupdict()
 
-        rv = L1DriverResourceInfo('', address, self._switch_family, self._switch_model, serial=model_info_dict["serial"])
+        rv = L1DriverResourceInfo('', address, self._switch_family, self._switch_model,
+                                  serial=model_info_dict["serial"])
         rv.set_attribute('Vendor', model_info_dict["vendor"])
         rv.set_attribute('Hardware Type', model_info_dict["type"])
         rv.set_attribute('Version', model_info_dict["version"])
@@ -179,7 +167,8 @@ class GlimmerglassL1Handler(L1HandlerBase):
                 else:
                     map_path = None
 
-                port = L1DriverResourceInfo(self._port_name_template.replace('{address}', str(logical_port_data['port_address'])),
+                port = L1DriverResourceInfo(self._port_name_template.replace('{address}',
+                                                                             str(logical_port_data['port_address'])),
                                             address_prefix + logical_port_data['port_address'],
                                             self._port_family,
                                             self._port_model,
@@ -196,8 +185,7 @@ class GlimmerglassL1Handler(L1HandlerBase):
 
                 if port_map_match is not None:
                     port_map_dict = port_map_match.groupdict()
-                    if int(port_map_dict['src_port']) > 0 and \
-                                    int(port_map_dict['dst_port']) > 0:
+                    if int(port_map_dict['src_port']) > 0 and int(port_map_dict['dst_port']) > 0:
                         src_port = port_map_dict["src_port"]
                         dst_port = port_map_dict["dst_port"]
                         # self._mapping_info[dst_port] = src_port
@@ -224,7 +212,8 @@ class GlimmerglassL1Handler(L1HandlerBase):
                                                 self._port_model,
                                                 map_path=map_path)
 
-                    port.set_attribute('State', 0 if port_info_dict["state"].lower() == "good" else 1, typename='Lookup')
+                    port.set_attribute('State', 0 if port_info_dict["state"].lower() == "good" else 1,
+                                       typename='Lookup')
                     port.set_attribute('Protocol Type', 0, typename='Lookup')
                     port.set_attribute('Port Description', port_info_dict["name"])
 
@@ -272,7 +261,8 @@ class GlimmerglassL1Handler(L1HandlerBase):
             src_out_port = str(20000 + int(source_port[1]))
             dst_out_port = str(20000 + int(destination_port[1]))
 
-            self._connection.tl1_command("ent-crs-fiber::%s&%s,%s&%s:{counter};" % (src_in_port, dst_in_port, dst_out_port, src_out_port))
+            self._connection.tl1_command("ent-crs-fiber::%s&%s,%s&%s:{counter};" % (
+                src_in_port, dst_in_port, dst_out_port, src_out_port))
         else:
             raise Exception(self.__class__.__name__,
                             "Bidirectional port mapping could be done only in logical port_mode " +
@@ -348,4 +338,3 @@ class GlimmerglassL1Handler(L1HandlerBase):
         """
         self._logger.info('get_state_id')
         return '-1'
-

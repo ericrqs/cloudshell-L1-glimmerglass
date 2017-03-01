@@ -6,6 +6,7 @@
 # - Subresources are also represented with nested instances of this class
 # - See example usage in <project>_l1_handler.py
 
+
 class L1DriverResourceInfo:
     def __init__(self, name, full_address, family, model, map_path=None, serial='-1'):
         """
